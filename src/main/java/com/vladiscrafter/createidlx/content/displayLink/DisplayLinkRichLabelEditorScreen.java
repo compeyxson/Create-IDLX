@@ -1,19 +1,23 @@
 package com.vladiscrafter.createidlx.content.displayLink;
 
+import com.simibubi.create.foundation.gui.AllGuiTextures;
 import com.simibubi.create.foundation.gui.AllIcons;
 import com.simibubi.create.foundation.gui.widget.IconButton;
+import com.simibubi.create.foundation.gui.widget.Label;
 import com.vladiscrafter.createidlx.config.CIDLXConfigs;
 import com.vladiscrafter.createidlx.foundation.gui.CreateIDLXGuiTextures;
 import com.vladiscrafter.createidlx.util.attachedLabel.AttachedLabelProcessingUtils;
 import com.vladiscrafter.createidlx.util.gui.UIRenderHelperAdditions;
 import com.vladiscrafter.createidlx.util.widget.ExpandedEditBox;
 import com.vladiscrafter.createidlx.util.widget.TextureButton;
+import com.vladiscrafter.createidlx.util.widget.rle.RLECaptureGroupScrollInput;
 import com.vladiscrafter.createidlx.util.widget.rle.RLECheckbox;
 import com.vladiscrafter.createidlx.util.widget.rle.RLEPlaceholderTabButton;
 import net.createmod.catnip.config.ui.ConfigHelper;
 import net.createmod.catnip.config.ui.SubMenuConfigScreen;
 import net.createmod.catnip.gui.AbstractSimiScreen;
 import net.createmod.catnip.gui.ScreenOpener;
+import net.createmod.catnip.gui.UIRenderHelper;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.CommonComponents;
@@ -43,6 +47,8 @@ public class DisplayLinkRichLabelEditorScreen extends AbstractSimiScreen {
     protected LinkedList<RLEPlaceholderTabButton> placeholderTabButtons;
 
     protected RLECheckbox standardPlaceholderCheckbox, alternativePlaceholderCheckbox;
+    protected RLECaptureGroupScrollInput leftGroupScrollInput, rightGroupScrollInput;
+    protected Label leftGroupScrollInputLabel, rightGroupScrollInputLabel;
 
     final CreateIDLXGuiTextures BACKGROUND = CreateIDLXGuiTextures.RICH_LABEL_EDITOR;
     final int PLACEHOLDER_TABS_SPACE = 336;
@@ -140,8 +146,13 @@ public class DisplayLinkRichLabelEditorScreen extends AbstractSimiScreen {
         if (standardPlaceholderCheckbox != null) removeWidget(standardPlaceholderCheckbox);
         if (alternativePlaceholderCheckbox != null) removeWidget(alternativePlaceholderCheckbox);
 
+        if (leftGroupScrollInput != null) removeWidget(leftGroupScrollInput);
+        if (leftGroupScrollInputLabel != null) removeWidget(leftGroupScrollInputLabel);
+
+        if (rightGroupScrollInput != null) removeWidget(rightGroupScrollInput);
+        if (rightGroupScrollInputLabel != null) removeWidget(rightGroupScrollInputLabel);
+
         Placeholder placeholder = placeholderTabButtons.get(index).getPlaceholder();
-        PlaceholderType type = placeholder.type();
 
         int x = guiLeft + 11, y = guiTop + 44;
 
@@ -156,7 +167,15 @@ public class DisplayLinkRichLabelEditorScreen extends AbstractSimiScreen {
             else alternativePlaceholderCheckbox.setOn(true);
         }
 
-        addRenderableWidgets(standardPlaceholderCheckbox, alternativePlaceholderCheckbox);
+        leftGroupScrollInputLabel = new Label(x + 109, y + 17, CommonComponents.EMPTY).withShadow();
+        leftGroupScrollInput = new RLECaptureGroupScrollInput(x + 104, y + 11, 56, 18, placeholder.properties().leftGroup()).writingTo(leftGroupScrollInputLabel);
+        leftGroupScrollInput.onChanged();
+
+        rightGroupScrollInputLabel = new Label(x + 183, y + 17, CommonComponents.EMPTY).withShadow();
+        rightGroupScrollInput = new RLECaptureGroupScrollInput(x + 178, y + 11, 56, 18, placeholder.properties().rightGroup()).writingTo(rightGroupScrollInputLabel);
+        rightGroupScrollInput.onChanged();
+
+        addRenderableWidgets(standardPlaceholderCheckbox, alternativePlaceholderCheckbox, leftGroupScrollInputLabel, leftGroupScrollInput, rightGroupScrollInputLabel, rightGroupScrollInput);
     }
 
     @Override
@@ -238,6 +257,14 @@ public class DisplayLinkRichLabelEditorScreen extends AbstractSimiScreen {
 
         CreateIDLXGuiTextures.RLE_PL_CAPTURE_GROUPS_BRACKETS.render(graphics, x + 115, y + 56);
 
+        drawInputBox(graphics, x + 115, y + 56, 56);
+        drawInputBox(graphics, x + 189, y + 56, 56);
+    }
+
+    private void drawInputBox(GuiGraphics graphics, int x, int y, int width) {
+        UIRenderHelper.drawStretched(graphics, x, y, width, 18, 0, AllGuiTextures.DATA_AREA);
+        AllGuiTextures.DATA_AREA_START.render(graphics, x, y);
+        AllGuiTextures.DATA_AREA_END.render(graphics, x + width - 2, y);
     }
 
     private void renderCounter(GuiGraphics graphics, int x, int y) {

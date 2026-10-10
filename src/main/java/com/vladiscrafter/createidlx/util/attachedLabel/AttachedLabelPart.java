@@ -1,13 +1,18 @@
 package com.vladiscrafter.createidlx.util.attachedLabel;
 
+import org.apache.commons.lang3.math.Fraction;
+
+import java.math.BigDecimal;
+
 public class AttachedLabelPart {
     public enum PlaceholderType { DOLLAR, BRACKETS, TRIM, TRIM_SHORT, TRIM_ALT, INVALID }
     public enum PlaceholderState { ACTIVE, ESCAPED, DISABLED, ESCAPED_DISABLED, INCOMPLETE, UNOPTIMIZED, SYNTACTICALLY_ERRORSOME, UNIDENTIFIED}
 
+    public enum CaptureGroupValueType { CHARS, FR_DECIMAL, FR_PERCENT, FR_PROPER }
     public enum CaptureGroupOperation { CUT, PRESERVE, NONE }
     public enum CaptureGroupRounding { CEIL, FLOOR, AUTO }
 
-    public static CaptureGroup invalidCG = new CaptureGroup(0, CaptureGroupOperation.NONE, CaptureGroupRounding.AUTO);
+    public static CaptureGroup invalidCG = new CaptureGroup(CaptureGroupValueType.CHARS, 0, CaptureGroupOperation.NONE, CaptureGroupRounding.AUTO);
 
     public static PlaceholderProperties invalidPr = new PlaceholderProperties(invalidCG, CaptureGroupOperation.NONE, invalidCG);
 
@@ -70,9 +75,17 @@ public class AttachedLabelPart {
         }
     }
 
-    public record CaptureGroup(Number value, CaptureGroupOperation operation, CaptureGroupRounding rounding) {
+    public record CaptureGroup(CaptureGroupValueType valueType, Number value, CaptureGroupOperation operation, CaptureGroupRounding rounding) {
         public String asDebugString() {
-            return String.format("{ V = %s | O = %s | R = %s }", value.toString(), operation, rounding);
+            return String.format("{ VT = %s | V = %s | O = %s | R = %s }", valueType, value.toString(), operation, rounding);
+        }
+
+        public boolean isFraction() {
+            return valueType != CaptureGroupValueType.CHARS;
+        }
+
+        public boolean isInvalid() {
+            return valueType == CaptureGroupValueType.CHARS ? value.intValue() < 0 : value.floatValue() > 1.0;
         }
     }
 
