@@ -1,9 +1,5 @@
 package com.vladiscrafter.createidlx.util.attachedLabel;
 
-import org.apache.commons.lang3.math.Fraction;
-
-import java.math.BigDecimal;
-
 public class AttachedLabelPart {
     public enum PlaceholderType { DOLLAR, BRACKETS, TRIM, TRIM_SHORT, TRIM_ALT, INVALID }
     public enum PlaceholderState { ACTIVE, ESCAPED, DISABLED, ESCAPED_DISABLED, INCOMPLETE, UNOPTIMIZED, SYNTACTICALLY_ERRORSOME, UNIDENTIFIED}
@@ -18,9 +14,55 @@ public class AttachedLabelPart {
 
     public static Placeholder invalid = new Placeholder("", PlaceholderType.INVALID, PlaceholderState.UNIDENTIFIED, invalidPr);
 
-    public record Placeholder(String raw, PlaceholderType type, PlaceholderState state, PlaceholderProperties properties) implements AttachedLabelBreakdownResult {
+    public static non-sealed class Placeholder implements AttachedLabelBreakdownResult {
+        private String raw;
+        private PlaceholderType type;
+        private PlaceholderState state;
+        private PlaceholderProperties properties;
+
+        public Placeholder(String raw, PlaceholderType type, PlaceholderState state, PlaceholderProperties properties) {
+            this.raw = raw;
+            this.type = type;
+            this.state = state;
+            this.properties = properties;
+        }
+
         public String getString() {
             return raw;
+        }
+
+        public void setString(String string) {
+            raw = string;
+        }
+
+        public PlaceholderType type() {
+            return type;
+        }
+
+        public void setType(PlaceholderType type) {
+            this.type = type;
+        }
+
+        public PlaceholderState state() {
+            return state;
+        }
+
+        public void setState(PlaceholderState state) {
+            this.state = state;
+        }
+
+        public PlaceholderProperties properties() {
+            return properties;
+        }
+
+        public void setProperties(PlaceholderProperties properties) {
+            this.properties = properties;
+            reconstructRaw();
+        }
+
+        public Placeholder withProperties(PlaceholderProperties properties) {
+            this.properties = properties;
+            return reconstructRaw();
         }
 
         public String asDebugString() {
@@ -66,25 +108,118 @@ public class AttachedLabelPart {
         public boolean isDisabled() {
             return state == PlaceholderState.DISABLED || state == PlaceholderState.ESCAPED_DISABLED;
         }
+
+        public Placeholder reconstructRaw() {
+            this.raw = AttachedLabelProcessingUtils.constructRawPlaceholder(this);
+            return this;
+        }
     }
 
-    public record PlaceholderProperties(CaptureGroup leftGroup, CaptureGroupOperation middleGroupOperation, CaptureGroup rightGroup) {
+    public static class PlaceholderProperties {
+        private CaptureGroup leftGroup;
+        private CaptureGroupOperation middleGroupOperation;
+        private CaptureGroup rightGroup;
+
+        public PlaceholderProperties(CaptureGroup leftGroup, CaptureGroupOperation middleGroupOperation, CaptureGroup rightGroup) {
+            this.leftGroup = leftGroup;
+            this.middleGroupOperation = middleGroupOperation;
+            this.rightGroup = rightGroup;
+        }
+
+        public CaptureGroup leftGroup() {
+            return leftGroup;
+        }
+
+        public void setLeftGroup(CaptureGroup leftGroup) {
+            this.leftGroup = leftGroup;
+        }
+
+        public PlaceholderProperties withLeftGroup(CaptureGroup leftGroup) {
+            this.leftGroup = leftGroup;
+            return this;
+        }
+
+        public CaptureGroupOperation middleGroupOperation() {
+            return middleGroupOperation;
+        }
+
+        public void setMiddleGroupOperation(CaptureGroupOperation middleGroupOperation) {
+            this.middleGroupOperation = middleGroupOperation;
+        }
+
+        public CaptureGroup rightGroup() {
+            return rightGroup;
+        }
+
+        public void setRightGroup(CaptureGroup rightGroup) {
+            this.rightGroup = rightGroup;
+        }
+
+        public PlaceholderProperties withRightGroup(CaptureGroup rightGroup) {
+            this.rightGroup = rightGroup;
+            return this;
+        }
+
         public String asDebugString() {
             return String.format("{\n        LG = %s\n        MGO = %s\n        RG = %s\n      }",
                     leftGroup.asDebugString(), middleGroupOperation, rightGroup.asDebugString());
         }
     }
 
-    public record CaptureGroup(CaptureGroupValueType valueType, Number value, CaptureGroupOperation operation, CaptureGroupRounding rounding) {
-        public String asDebugString() {
+    public static class CaptureGroup {
+        private CaptureGroupValueType valueType;
+        private Number value;
+        private CaptureGroupOperation operation;
+        private CaptureGroupRounding rounding;
+
+        public CaptureGroup(CaptureGroupValueType valueType, Number value, CaptureGroupOperation operation, CaptureGroupRounding rounding) {
+            this.valueType = valueType;
+            this.value = value;
+            this.operation = operation;
+            this.rounding = rounding;
+        }
+
+        public CaptureGroupValueType valueType() {
+            return valueType;
+        }
+
+        public void setValueType(CaptureGroupValueType valueType) {
+            this.valueType = valueType;
+        }
+
+        public Number value() {
+            return value;
+        }
+
+        public void setValue(Number value) {
+            this.value = value;
+        }
+
+        public CaptureGroupOperation operation() {
+            return operation;
+        }
+
+        public void setOperation(CaptureGroupOperation operation) {
+            this.operation = operation;
+        }
+
+        public CaptureGroupRounding rounding() {
+            return rounding;
+        }
+
+        public void setRounding(CaptureGroupRounding rounding) {
+            this.rounding = rounding;
+        }
+
+        public String asDebugString () {
             return String.format("{ VT = %s | V = %s | O = %s | R = %s }", valueType, value.toString(), operation, rounding);
         }
 
-        public boolean isFraction() {
+        public boolean isFraction () {
             return valueType != CaptureGroupValueType.CHARS;
         }
 
-        public boolean isInvalid() {
+        public boolean isInvalid () {
             return valueType == CaptureGroupValueType.CHARS ? value.intValue() < 0 : value.floatValue() > 1.0;
         }
     }

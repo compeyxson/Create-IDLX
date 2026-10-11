@@ -285,9 +285,7 @@ public class AttachedLabelProcessingUtils {
         PlaceholderType type = TRIM;
 
         CaptureGroup leftGroup = invalidCG, rightGroup = invalidCG;
-        Number leftGroupValue = 0, rightGroupValue = 0;
         CaptureGroupOperation leftGroupOperation = NONE, middleGroupOperation = NONE, rightGroupOperation = NONE;
-        CaptureGroupRounding leftGroupRounding = AUTO, rightGroupRounding = AUTO;
 
         if (text.charAt(i) != '$' && text.charAt(i) != '{' && text.charAt(i) != '}') return invalid;
         else if (text.charAt(i) == '$') hasLeftHalf = false;
@@ -354,9 +352,7 @@ public class AttachedLabelProcessingUtils {
         PlaceholderType type = TRIM_ALT;
 
         CaptureGroup leftGroup = invalidCG, rightGroup = invalidCG;
-        Number leftGroupValue = 0, rightGroupValue = 0;
         CaptureGroupOperation[] operations = new CaptureGroupOperation[3];
-        CaptureGroupRounding leftGroupRounding = AUTO, rightGroupRounding = AUTO;
 
         String leftGroupRaw = "";
         while (!readLeftGroup) {
@@ -384,7 +380,7 @@ public class AttachedLabelProcessingUtils {
             lI++;
         }
         CaptureGroupOperation leftGroupOperation = operations[0], middleGroupOperation = operations[1], rightGroupOperation = operations[2];
-        leftGroup = assembleCaptureGroup(leftGroupRaw, TRIM_ALT, leftGroupOperation);
+        leftGroup.setOperation(leftGroupOperation);
 
         String rightGroupRaw = "";
         while (!readRightGroup) {
@@ -403,8 +399,6 @@ public class AttachedLabelProcessingUtils {
         }
         /*log(String.format("[alt] right CG parsed: '%s' -> %s\n", rightGroupRaw, rightGroupValue));*/
 
-        /*CaptureGroup leftGroup = new CaptureGroup(leftGroupValue, leftGroupOperation, leftGroupRounding);*/
-        /*CaptureGroup rightGroup = new CaptureGroup(rightGroupValue, rightGroupOperation, rightGroupRounding);*/
         PlaceholderProperties properties = new PlaceholderProperties(leftGroup, middleGroupOperation, rightGroup);
 
         return new Placeholder(text.substring(i, lI), type, ACTIVE, properties);
@@ -424,7 +418,7 @@ public class AttachedLabelProcessingUtils {
     }
 
     private static String cleanUpCaptureGroupRounders(String raw) {
-        String result =  raw.toUpperCase()
+        String result = raw.toUpperCase()
                 .replace("+", "").replace("-", "")
                 .replace("C", "").replace("F", "")
                 .replace("U", "").replace("D", "")
@@ -537,5 +531,49 @@ public class AttachedLabelProcessingUtils {
             case TRIM_ALT -> isAlternativeTrimmingPlaceholderEnabled;
             default -> false;
         });
+    }
+
+    public static String constructRawCaptureGroup(CaptureGroup captureGroup, boolean alt, boolean left) {
+        Number v = captureGroup.valueType() == CaptureGroupValueType.FR_PERCENT
+                ? Math.round(captureGroup.value().floatValue() * 100) : captureGroup.value();
+        String valuePart = v.toString() + (captureGroup.valueType() == CaptureGroupValueType.FR_PERCENT ? "%" : "");
+        String rounder = alt ? captureGroup.rounding().name().charAt(0) + "" : switch (captureGroup.rounding()) {
+            case CEIL -> "+";
+            case FLOOR -> "-";
+            default -> "";
+        };
+
+        return String.format((left ? "%2$s%1$s" : "%1$s%2$s"), valuePart, rounder);
+    }
+
+    public static String constructRawPlaceholder(Placeholder placeholder) {
+        PlaceholderType type = placeholder.type();
+        PlaceholderProperties properties = placeholder.properties();
+        CaptureGroup leftGroup = properties.leftGroup(), rightGroup = properties.rightGroup();
+        String escaping = placeholder.isEscaped() ? "\\" : "";
+
+        String baked = switch (type) {
+            case DOLLAR -> "$";
+            case BRACKETS -> "{}";
+            case TRIM -> String.format("%s%s$%s%s",
+                    leftGroup.operation() == CUT ? "{" : "}",
+                    constructRawCaptureGroup(leftGroup, false, true),
+                    constructRawCaptureGroup(rightGroup, false, false),
+                    rightGroup.operation() == CUT ? "}" : "{");
+            case TRIM_SHORT -> (rightGroup.value().floatValue() == 0f)
+                    ? String.format("%s%s$", leftGroup.operation() == CUT ? "{" : "}",
+                    constructRawCaptureGroup(leftGroup, false, true))
+                    : String.format("$%s%s", constructRawCaptureGroup(rightGroup, false, false),
+                    leftGroup.operation() == CUT ? "{" : "}");
+            case TRIM_ALT -> String.format("${%s%s%s%s%s}",
+                    constructRawCaptureGroup(leftGroup, true, true),
+                    leftGroup.operation() == CUT ? "-" : "+",
+                    properties.middleGroupOperation() == CUT ? "-" : "+",
+                    rightGroup.operation() == CUT ? "-" : "+",
+                    constructRawCaptureGroup(rightGroup, true, false));
+            default -> "";
+        };
+
+        return escaping + baked;
     }
 }

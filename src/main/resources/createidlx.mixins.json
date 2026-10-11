@@ -27,6 +27,7 @@
   "client": [
     "accessor.catnip.UIRenderHelperAccessor",
     "accessor.create.ModularGuiLineAccessor",
+    "accessor.minecraft.EditBoxAccessor",
     "accessor.ponder.PonderUIAccessor",
     "create.clipboard.ClipboardValueSettingsHandlerMixin",
     "create.displayLink.DisplayLinkScreenMixin",
