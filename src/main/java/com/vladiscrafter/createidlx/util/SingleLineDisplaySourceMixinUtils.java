@@ -165,8 +165,4 @@ public class SingleLineDisplaySourceMixinUtils {
         /*log("New layout signature: " + signature);*/
         return signature.toString();
     }
-
-    public static void log(String text) {
-        if (Minecraft.getInstance().player != null) Minecraft.getInstance().player.sendSystemMessage(Component.literal(text));
-    }
 }

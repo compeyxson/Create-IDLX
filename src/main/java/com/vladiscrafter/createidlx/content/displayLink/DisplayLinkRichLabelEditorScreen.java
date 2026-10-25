@@ -4,10 +4,11 @@ import com.simibubi.create.foundation.gui.AllGuiTextures;
 import com.simibubi.create.foundation.gui.AllIcons;
 import com.simibubi.create.foundation.gui.widget.IconButton;
 import com.simibubi.create.foundation.gui.widget.Label;
+import com.simibubi.create.foundation.gui.widget.SelectionScrollInput;
+import com.vladiscrafter.createidlx.CreateIDLX;
 import com.vladiscrafter.createidlx.config.CIDLXConfigs;
 import com.vladiscrafter.createidlx.foundation.gui.CreateIDLXGuiTextures;
 import com.vladiscrafter.createidlx.mixin.accessor.minecraft.EditBoxAccessor;
-import com.vladiscrafter.createidlx.util.SingleLineDisplaySourceMixinUtils;
 import com.vladiscrafter.createidlx.util.attachedLabel.AttachedLabelProcessingUtils;
 import com.vladiscrafter.createidlx.util.gui.UIRenderHelperAdditions;
 import com.vladiscrafter.createidlx.util.widget.ExpandedEditBox;
@@ -40,6 +41,7 @@ public class DisplayLinkRichLabelEditorScreen extends AbstractSimiScreen {
 
     protected LinkedHashMap<Integer, Placeholder> placeholders;
     int selectedPlaceholderIndex;
+    Placeholder selectedPlaceholder;
 
     protected TextureButton configButton;
     protected ExpandedEditBox label;
@@ -51,7 +53,10 @@ public class DisplayLinkRichLabelEditorScreen extends AbstractSimiScreen {
     protected RLECheckbox standardPlaceholderCheckbox, alternativePlaceholderCheckbox;
     protected RLECaptureGroupScrollInput leftGroupScrollInput, rightGroupScrollInput;
     protected Label leftGroupScrollInputLabel, rightGroupScrollInputLabel;
-    protected HashMap<Class<?>, Number> leftGroupCache, rightGroupCache;
+    protected LinkedHashMap<CaptureGroupValueType, Number> leftGroupCache, rightGroupCache;
+    protected SelectionScrollInput leftGroupOperationSelector, middleGroupOperationSelector, rightGroupOperationSelector;
+    protected Label leftGroupOperationSelectorLabel, middleGroupOperationSelectorLabel, rightGroupOperationSelectorLabel;
+    protected Component leftGroupScrollInputLabelCache, rightGroupScrollInputLabelCache;
 
     final CreateIDLXGuiTextures BACKGROUND = CreateIDLXGuiTextures.RICH_LABEL_EDITOR;
     final int PLACEHOLDER_TABS_SPACE = 336;
@@ -59,7 +64,10 @@ public class DisplayLinkRichLabelEditorScreen extends AbstractSimiScreen {
     final Component plType = Component.literal("Type");
     final Component plCaptureGroups = Component.literal("Capture Groups");
     final Component plFlags = Component.literal("Flags");
-
+    final Component plTypeS = Component.literal("Standard");
+    final Component plTypeA = Component.literal("Alternative");
+    final List<Component> plOperations = List.of(Component.literal("Cut"), Component.literal("Preserve"), Component.literal("None"));
+    final List<Component> plOperationsAlt = List.of(Component.literal("Drop"), Component.literal("Keep"), Component.literal("None"));
     final DefaultClosingMode defaultClosingMode = CIDLXConfigs.client.rleDefaultClosingMode.get();
     final CounterPosition counterPosition = CIDLXConfigs.client.rleCounterPosition.get();
     final TabWidthDistributionMode tabWidthDistributionMode = CIDLXConfigs.client.rleTabWidthDistributionMode.get();
@@ -74,6 +82,13 @@ public class DisplayLinkRichLabelEditorScreen extends AbstractSimiScreen {
         this.placeholders = new LinkedHashMap<>();
         this.placeholderTabButtons = new LinkedList<>();
         this.selectedPlaceholderIndex = 0;
+        this.selectedPlaceholder = invalid.copy();
+
+        this.leftGroupCache = new LinkedHashMap<>(3);
+        this.rightGroupCache = new LinkedHashMap<>(3);
+
+        this.leftGroupScrollInputLabelCache = Component.literal("—");
+        this.rightGroupScrollInputLabelCache = Component.literal("—");
     }
 
     @Override
@@ -91,10 +106,9 @@ public class DisplayLinkRichLabelEditorScreen extends AbstractSimiScreen {
         label.setValue(text);
         label.setResponder(this::onLabelUpdate);
 
-        configButton = new TextureButton(0, y + 3, 9, 9, CreateIDLXGuiTextures.RLE_CONFIG);
-        configButton.visible = enableScreenConfigButton;
         int hX = x + BACKGROUND.getWidth() / 2 - font.width(header) / 2;
-        configButton.setX(hX - 13);
+        configButton = new TextureButton(hX - 13, y + 3, 9, 9, CreateIDLXGuiTextures.RLE_CONFIG);
+        configButton.visible = enableScreenConfigButton;
         configButton.withCallback(() -> ScreenOpener.open(SubMenuConfigScreen.find(ConfigHelper.ConfigPath.parse(
                                     "createidlx:client." + CIDLXConfigs.client.displayLinkGUI.getName()
                                             + "." + CIDLXConfigs.client.richLabelEditorCustomization.getName()
@@ -106,9 +120,7 @@ public class DisplayLinkRichLabelEditorScreen extends AbstractSimiScreen {
         addRenderableWidgets(label, configButton, confirmButton, resetButton);
 
         clearGroupCaches();
-
         onLabelUpdate(text, true);
-
         buildPlaceholderTabs(0);
     }
 
@@ -125,26 +137,27 @@ public class DisplayLinkRichLabelEditorScreen extends AbstractSimiScreen {
             for (Placeholder placeholder : placeholders.values()) {
                 final int lI = i;
                 placeholderTabButtons.add(new RLEPlaceholderTabButton(tX, y, calculatePlaceholderButtonWidth(false), lI, placeholder)
-                        .withCallback(() -> selectPlaceholder(lI)));
+                        .withCallback(() -> selectPlaceholder(lI, placeholder)));
                 tX += calculatePlaceholderButtonWidth(true);
                 i++;
             }
         } else for (Placeholder placeholder : placeholders.values()) {
             final int lI = i;
             placeholderTabButtons.add(new RLEPlaceholderTabButton(tX, y, calculatePlaceholderButtonWidths().get(lI), lI, placeholder)
-                    .withCallback(() -> selectPlaceholder(lI)));
+                    .withCallback(() -> selectPlaceholder(lI, placeholder)));
             tX += calculatePlaceholderButtonWidths().get(i) + 2;
             i++;
         }
 
         newPlaceholderTabButton = new TextureButton(x + (!placeholders.isEmpty() ? 345 : 171), y + 2, 9, 9, CreateIDLXGuiTextures.RLE_TABS_NEW, CreateIDLXGuiTextures.RLE_TABS_NEW_H);
-        newPlaceholderTabButton.withCallback(this::refreshPlaceholders); // this::addPlaceholder
+        newPlaceholderTabButton.withCallback(() -> label.insertText(dollar.getString()));
         newPlaceholderTabButton.setNonFocusable();
 
         addRenderableWidgets(placeholderTabButtons);
         addRenderableWidget(newPlaceholderTabButton);
 
-        selectPlaceholder(index);
+        int si = Math.min(index, placeholders.size() - 1);
+        if (!placeholders.isEmpty()) selectPlaceholder(si, placeholderTabButtons.get(si).getPlaceholder());
     }
 
     private void buildPlaceholderConfig(int index) {
@@ -157,6 +170,17 @@ public class DisplayLinkRichLabelEditorScreen extends AbstractSimiScreen {
         if (rightGroupScrollInput != null) removeWidget(rightGroupScrollInput);
         if (rightGroupScrollInputLabel != null) removeWidget(rightGroupScrollInputLabel);
 
+        if (leftGroupOperationSelector != null) removeWidget(leftGroupOperationSelector);
+        if (leftGroupOperationSelectorLabel != null) removeWidget(leftGroupOperationSelectorLabel);
+
+        if (middleGroupOperationSelector != null) removeWidget(middleGroupOperationSelector);
+        if (middleGroupOperationSelectorLabel != null) removeWidget(middleGroupOperationSelectorLabel);
+
+        if (rightGroupOperationSelector != null) removeWidget(rightGroupOperationSelector);
+        if (rightGroupOperationSelectorLabel != null) removeWidget(rightGroupOperationSelectorLabel);
+
+        if (placeholders.isEmpty()) return;
+
         Placeholder placeholder = placeholderTabButtons.get(index).getPlaceholder();
         int psi = placeholders.keySet().toArray(new Integer[placeholders.size()])[index];
 
@@ -168,28 +192,63 @@ public class DisplayLinkRichLabelEditorScreen extends AbstractSimiScreen {
         standardPlaceholderCheckbox.setLinkedCheckbox(alternativePlaceholderCheckbox);
         alternativePlaceholderCheckbox.setLinkedCheckbox(standardPlaceholderCheckbox);
 
+        standardPlaceholderCheckbox.withCallback(() -> togglePlaceholderType(psi, placeholder));
+        alternativePlaceholderCheckbox.withCallback(() -> togglePlaceholderType(psi, placeholder));
+
         if (!placeholder.isType(INVALID)) {
             if (placeholder.isStandard()) standardPlaceholderCheckbox.setOn(true);
             else alternativePlaceholderCheckbox.setOn(true);
         }
+        boolean alt = placeholder.isAlternative();
 
         leftGroupScrollInputLabel = new Label(x + 109, y + 17, CommonComponents.EMPTY).withShadow();
-        leftGroupScrollInput = new RLECaptureGroupScrollInput(x + 104, y + 11, 56, 18, placeholder.properties().leftGroup(), leftGroupCache).writingTo(leftGroupScrollInputLabel);
-        leftGroupScrollInput.withScrollCallback((pcg, cg) -> {
-            Placeholder oldPlaceholder = new Placeholder(placeholder.getString(), placeholder.type(), placeholder.state(), placeholder.properties().withLeftGroup(pcg));
-            placeholder.setProperties(placeholder.properties().withLeftGroup(cg));
-            onPlaceholderUpdate(psi, oldPlaceholder, placeholder);
-        }).onChanged();
+        leftGroupScrollInput = new RLECaptureGroupScrollInput(x + 104, y + 11, 56, 18, placeholder.properties().leftGroup(), leftGroupCache);
+        leftGroupScrollInput.withScrollCallback((pcg, cg) -> onPlaceholderUpdate(psi,
+                    placeholder.copy().withProperties(placeholder.properties().copy().withLeftGroup(pcg.copy())),
+                    placeholder.withProperties(placeholder.properties().copy().withLeftGroup(cg.copy())))).onChanged();
+        leftGroupScrollInputLabel.colored(leftGroupScrollInput.isActive() ? 0xFFFFFF : 0xA3A3A3);
+        if (placeholder.properties().leftGroup().operation() != CaptureGroupOperation.NONE) {
+            leftGroupScrollInput.writingTo(leftGroupScrollInputLabel);
+            leftGroupScrollInputLabelCache = leftGroupScrollInputLabel.text;
+        } else leftGroupScrollInputLabel.text = leftGroupScrollInputLabelCache;
 
         rightGroupScrollInputLabel = new Label(x + 183, y + 17, CommonComponents.EMPTY).withShadow();
-        rightGroupScrollInput = new RLECaptureGroupScrollInput(x + 178, y + 11, 56, 18, placeholder.properties().rightGroup(), rightGroupCache).writingTo(rightGroupScrollInputLabel);
-        rightGroupScrollInput.withScrollCallback((pcg, cg) -> {
-            Placeholder oldPlaceholder = new Placeholder(placeholder.getString(), placeholder.type(), placeholder.state(), placeholder.properties().withRightGroup(pcg));
-            placeholder.setProperties(placeholder.properties().withRightGroup(cg));
-            onPlaceholderUpdate(psi, oldPlaceholder, placeholder);
-        }).onChanged();
+        rightGroupScrollInput = new RLECaptureGroupScrollInput(x + 178, y + 11, 56, 18, placeholder.properties().rightGroup(), rightGroupCache);
+        rightGroupScrollInput.withScrollCallback((pcg, cg) -> onPlaceholderUpdate(psi,
+                placeholder.copy().withProperties(placeholder.properties().copy().withRightGroup(pcg.copy())),
+                placeholder.withProperties(placeholder.properties().copy().withRightGroup(cg.copy())))).onChanged();
+        rightGroupScrollInputLabel.colored(rightGroupScrollInput.isActive() ? 0xFFFFFF : 0xA3A3A3);
+        if (placeholder.properties().rightGroup().operation() != CaptureGroupOperation.NONE) {
+            rightGroupScrollInput.writingTo(rightGroupScrollInputLabel);
+            rightGroupScrollInputLabelCache = rightGroupScrollInputLabel.text;
+        } else rightGroupScrollInputLabel.text = rightGroupScrollInputLabelCache;
 
-        addRenderableWidgets(standardPlaceholderCheckbox, alternativePlaceholderCheckbox, leftGroupScrollInputLabel, leftGroupScrollInput, rightGroupScrollInputLabel, rightGroupScrollInput);
+        leftGroupOperationSelectorLabel = new Label(x + 109, y + 38, CommonComponents.EMPTY).withShadow();
+        leftGroupOperationSelector = new SelectionScrollInput(x + 104, y + 32, !alt ? 63 : 40, 18);
+        leftGroupOperationSelector.calling(s -> selectCaptureGroupOperation(psi, placeholder, 0, s));
+        leftGroupOperationSelector.forOptions(!alt ? plOperations : plOperationsAlt).writingTo(leftGroupOperationSelectorLabel)
+                .setState(placeholder.properties().leftGroup().operation().ordinal()).onChanged();
+
+        if (alt) {
+            middleGroupOperationSelectorLabel = new Label(x + 154, y + 38, CommonComponents.EMPTY).withShadow();
+            middleGroupOperationSelector = new SelectionScrollInput(x + 149, y + 32, !alt ? 63 : 40, 18);
+            middleGroupOperationSelector.calling(s -> selectCaptureGroupOperation(psi, placeholder, 1, s));
+            middleGroupOperationSelector.forOptions(!alt ? plOperations : plOperationsAlt).writingTo(middleGroupOperationSelectorLabel)
+                    .setState(placeholder.properties().middleGroupOperation().ordinal()).onChanged();
+        }
+
+        rightGroupOperationSelectorLabel = new Label(x + (!alt ? 176 : 199), y + 38, CommonComponents.EMPTY).withShadow();
+        rightGroupOperationSelector = new SelectionScrollInput(x + (!alt ? 171 : 194), y + 32, !alt ? 63 : 40, 18);
+        rightGroupOperationSelector.calling(s -> selectCaptureGroupOperation(psi, placeholder, 2, s));
+        rightGroupOperationSelector.forOptions(!alt ? plOperations : plOperationsAlt).writingTo(rightGroupOperationSelectorLabel)
+                .setState(placeholder.properties().rightGroup().operation().ordinal()).onChanged();
+
+        addRenderableWidgets(standardPlaceholderCheckbox, alternativePlaceholderCheckbox,
+                leftGroupScrollInputLabel, leftGroupScrollInput,
+                rightGroupScrollInputLabel, rightGroupScrollInput,
+                leftGroupOperationSelectorLabel, leftGroupOperationSelector,
+                rightGroupOperationSelectorLabel, rightGroupOperationSelector);
+        if (alt) addRenderableWidgets(middleGroupOperationSelectorLabel, middleGroupOperationSelector);
     }
 
     @Override
@@ -265,14 +324,21 @@ public class DisplayLinkRichLabelEditorScreen extends AbstractSimiScreen {
         graphics.drawCenteredString(font, plCaptureGroups, x + 11 + 100 + 69, fY + 4, 0xffffff);
         graphics.drawCenteredString(font, plFlags, x + 11 + 242 + 48, fY + 4, 0xffffff);
 
-        graphics.drawString(font, Component.literal("Standard"), x + 36, y + 64, 0xffffff);
+        graphics.drawString(font, plTypeS, x + 36, y + 64, 0xffffff);
         CreateIDLXGuiTextures.RLE_PL_TYPE_RADIO_WIRE.render(graphics, x + 27, y + 72);
-        graphics.drawString(font, Component.literal("Alternative"), x + 36, y + 81, 0xffffff);
+        graphics.drawString(font, plTypeA, x + 36, y + 81, 0xffffff);
 
         CreateIDLXGuiTextures.RLE_PL_CAPTURE_GROUPS_BRACKETS.render(graphics, x + 115, y + 56);
 
-        drawInputBox(graphics, x + 115, y + 56, 56);
-        drawInputBox(graphics, x + 189, y + 56, 56);
+        boolean alt = selectedPlaceholder.isAlternative();
+        if (selectedPlaceholder.type() != INVALID) {
+            drawInputBox(graphics, x + 115, y + 56, 56);
+            drawInputBox(graphics, x + 189, y + 56, 56);
+
+            drawInputBox(graphics, x + 115, y + 77, !alt ? 63 : 40);
+            if (alt) drawInputBox(graphics, x + 160, y + 77, 40);
+            drawInputBox(graphics, x + (!alt ? 182 : 205), y + 77, !alt ? 63 : 40);
+        }
     }
 
     private void drawInputBox(GuiGraphics graphics, int x, int y, int width) {
@@ -306,10 +372,11 @@ public class DisplayLinkRichLabelEditorScreen extends AbstractSimiScreen {
         }
     }
 
-    public void selectPlaceholder(int index) {
+    public void selectPlaceholder(int index, Placeholder placeholder) {
         if (index != selectedPlaceholderIndex) {
             clearGroupCaches();
             selectedPlaceholderIndex = index;
+            selectedPlaceholder = placeholder;
         }
 
         for (RLEPlaceholderTabButton button : placeholderTabButtons) button.setSelected(index == button.getIndex());
@@ -318,8 +385,8 @@ public class DisplayLinkRichLabelEditorScreen extends AbstractSimiScreen {
     }
 
     private void clearGroupCaches() {
-        leftGroupCache = new HashMap<>(3);
-        rightGroupCache = new HashMap<>(3);
+        leftGroupCache.clear();
+        rightGroupCache.clear();
     }
 
     private void refreshPlaceholders() {
@@ -356,11 +423,57 @@ public class DisplayLinkRichLabelEditorScreen extends AbstractSimiScreen {
         return widths;
     }
 
+    public void togglePlaceholderType(int i, Placeholder oldPlaceholder) {
+        PlaceholderType newType = oldPlaceholder.conditional(oldPlaceholder.isStandard());
+        Placeholder newPlaceholder = oldPlaceholder.copy().withType(newType);
+        onPlaceholderUpdate(i, oldPlaceholder, newPlaceholder);
+    }
+
+    public void selectCaptureGroupOperation(int i, Placeholder oldPlaceholder, int cgi, int oi) {
+        CaptureGroupOperation newOperation = CaptureGroupOperation.values()[oi];
+        Placeholder newPlaceholder = oldPlaceholder.copy();
+        PlaceholderProperties properties = newPlaceholder.properties();
+
+        if (cgi == 1) properties.withMiddleGroupOperation(newOperation);
+        else {
+            boolean left = cgi == 0;
+            CaptureGroup group = left ? properties.leftGroup() : properties.rightGroup();
+            LinkedHashMap<CaptureGroupValueType, Number> cache = left ? leftGroupCache : rightGroupCache;
+            CaptureGroupOperation oldOperation = group.operation();
+
+            if (newOperation == CaptureGroupOperation.NONE && oldOperation != CaptureGroupOperation.NONE) {
+                cache.remove(group.valueType());
+                cache.put(group.valueType(), group.value());
+            }
+            else if (oldOperation == CaptureGroupOperation.NONE && newOperation != CaptureGroupOperation.NONE) {
+                CaptureGroupValueType cvt = !cache.isEmpty() ? cache.sequencedKeySet().getLast() : CaptureGroupValueType.CHARS;
+                Number cv = !cache.isEmpty() ? cache.sequencedValues().getLast() : RLECaptureGroupScrollInput.NEW_INTEGER;
+                group.withValueType(cvt).withValue(cv);
+            }
+
+            group.withOperation(newOperation);
+        }
+
+        if (oldPlaceholder.type() == TRIM_ALT && newOperation == CaptureGroupOperation.NONE) {
+            properties.leftGroup().setOperation(CaptureGroupOperation.NONE);
+            properties.setMiddleGroupOperation(CaptureGroupOperation.NONE);
+            properties.rightGroup().setOperation(CaptureGroupOperation.NONE);
+        } else if (oldPlaceholder.type() == BRACKETS && newOperation != CaptureGroupOperation.NONE) {
+            properties.leftGroup().setOperation(CaptureGroupOperation.PRESERVE);
+            properties.setMiddleGroupOperation(CaptureGroupOperation.PRESERVE);
+            properties.rightGroup().setOperation(CaptureGroupOperation.PRESERVE);
+        }
+
+        newPlaceholder.reconstruct();
+        onPlaceholderUpdate(i, oldPlaceholder, newPlaceholder);
+    }
+
     public void onPlaceholderUpdate(int i, Placeholder oldPlaceholder, Placeholder newPlaceholder) {
         if (oldPlaceholder.equals(newPlaceholder)) return;
 
+        selectedPlaceholder = newPlaceholder;
         String firstHalf = text.substring(0, i);
-        String secondHalf = text.substring(i + oldPlaceholder.length());
+        String secondHalf = text.substring(Math.min(i + oldPlaceholder.length(), text.length()));
 
         onLabelUpdate(firstHalf + newPlaceholder.getString() + secondHalf);
     }

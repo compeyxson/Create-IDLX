@@ -5,6 +5,7 @@ import com.vladiscrafter.createidlx.config.CIDLXConfigs;
 import com.vladiscrafter.createidlx.registry.CreateIDLXDisplaySources;
 import net.createmod.catnip.lang.LangBuilder;
 import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
@@ -108,5 +109,9 @@ public class CreateIDLX {
 
     private void onReloadConfig(ModConfigEvent.Reloading evt) {
         CIDLXConfigs.onReload(evt.getConfig());
+    }
+
+    public static void log(String text) {
+        if (Minecraft.getInstance().player != null) Minecraft.getInstance().player.sendSystemMessage(Component.literal(text));
     }
 }

@@ -12,6 +12,8 @@ public class AttachedLabelPart {
 
     public static PlaceholderProperties invalidPr = new PlaceholderProperties(invalidCG, CaptureGroupOperation.NONE, invalidCG);
 
+    public static Placeholder dollar = new Placeholder("$", PlaceholderType.DOLLAR, PlaceholderState.ACTIVE, invalidPr);
+    public static Placeholder brackets = new Placeholder("{}", PlaceholderType.BRACKETS, PlaceholderState.ACTIVE, invalidPr);
     public static Placeholder invalid = new Placeholder("", PlaceholderType.INVALID, PlaceholderState.UNIDENTIFIED, invalidPr);
 
     public static non-sealed class Placeholder implements AttachedLabelBreakdownResult {
@@ -25,6 +27,10 @@ public class AttachedLabelPart {
             this.type = type;
             this.state = state;
             this.properties = properties;
+        }
+
+        public Placeholder copy() {
+            return new Placeholder(this.raw, this.type, this.state, this.properties.copy());
         }
 
         public String getString() {
@@ -41,6 +47,12 @@ public class AttachedLabelPart {
 
         public void setType(PlaceholderType type) {
             this.type = type;
+            reconstruct();
+        }
+
+        public Placeholder withType(PlaceholderType type) {
+            this.type = type;
+            return reconstruct();
         }
 
         public PlaceholderState state() {
@@ -49,6 +61,12 @@ public class AttachedLabelPart {
 
         public void setState(PlaceholderState state) {
             this.state = state;
+            reconstruct();
+        }
+
+        public Placeholder withState(PlaceholderState state) {
+            this.state = state;
+            return reconstruct();
         }
 
         public PlaceholderProperties properties() {
@@ -57,12 +75,12 @@ public class AttachedLabelPart {
 
         public void setProperties(PlaceholderProperties properties) {
             this.properties = properties;
-            reconstructRaw();
+            reconstruct();
         }
 
         public Placeholder withProperties(PlaceholderProperties properties) {
             this.properties = properties;
-            return reconstructRaw();
+            return reconstruct();
         }
 
         public String asDebugString() {
@@ -109,7 +127,17 @@ public class AttachedLabelPart {
             return state == PlaceholderState.DISABLED || state == PlaceholderState.ESCAPED_DISABLED;
         }
 
-        public Placeholder reconstructRaw() {
+        public PlaceholderType conditional(boolean alt) {
+            boolean noLeftGroup = this.properties.leftGroup.operation == CaptureGroupOperation.NONE;
+            boolean noRightGroup = this.properties.rightGroup.operation == CaptureGroupOperation.NONE;
+
+            if (noLeftGroup && noRightGroup) return !alt ? PlaceholderType.DOLLAR : PlaceholderType.BRACKETS;
+            else if (!alt && (noLeftGroup || noRightGroup)) return PlaceholderType.TRIM_SHORT;
+            else return !alt ? PlaceholderType.TRIM : PlaceholderType.TRIM_ALT;
+        }
+
+        public Placeholder reconstruct() {
+            this.type = conditional(this.isAlternative());
             this.raw = AttachedLabelProcessingUtils.constructRawPlaceholder(this);
             return this;
         }
@@ -124,6 +152,10 @@ public class AttachedLabelPart {
             this.leftGroup = leftGroup;
             this.middleGroupOperation = middleGroupOperation;
             this.rightGroup = rightGroup;
+        }
+
+        public PlaceholderProperties copy() {
+            return new PlaceholderProperties(this.leftGroup.copy(), this.middleGroupOperation, this.rightGroup.copy());
         }
 
         public CaptureGroup leftGroup() {
@@ -145,6 +177,11 @@ public class AttachedLabelPart {
 
         public void setMiddleGroupOperation(CaptureGroupOperation middleGroupOperation) {
             this.middleGroupOperation = middleGroupOperation;
+        }
+
+        public PlaceholderProperties withMiddleGroupOperation(CaptureGroupOperation middleGroupOperation) {
+            this.middleGroupOperation = middleGroupOperation;
+            return this;
         }
 
         public CaptureGroup rightGroup() {
@@ -179,12 +216,21 @@ public class AttachedLabelPart {
             this.rounding = rounding;
         }
 
+        public CaptureGroup copy() {
+            return new CaptureGroup(this.valueType, this.value, this.operation, this.rounding);
+        }
+
         public CaptureGroupValueType valueType() {
             return valueType;
         }
 
         public void setValueType(CaptureGroupValueType valueType) {
             this.valueType = valueType;
+        }
+
+        public CaptureGroup withValueType(CaptureGroupValueType valueType) {
+            this.valueType = valueType;
+            return this;
         }
 
         public Number value() {
@@ -195,6 +241,11 @@ public class AttachedLabelPart {
             this.value = value;
         }
 
+        public CaptureGroup withValue(Number value) {
+            this.value = value;
+            return this;
+        }
+
         public CaptureGroupOperation operation() {
             return operation;
         }
@@ -203,12 +254,22 @@ public class AttachedLabelPart {
             this.operation = operation;
         }
 
+        public CaptureGroup withOperation(CaptureGroupOperation operation) {
+            this.operation = operation;
+            return this;
+        }
+
         public CaptureGroupRounding rounding() {
             return rounding;
         }
 
         public void setRounding(CaptureGroupRounding rounding) {
             this.rounding = rounding;
+        }
+
+        public CaptureGroup withRounding(CaptureGroupRounding rounding) {
+            this.rounding = rounding;
+            return this;
         }
 
         public String asDebugString () {
@@ -222,6 +283,7 @@ public class AttachedLabelPart {
         public boolean isInvalid () {
             return valueType == CaptureGroupValueType.CHARS ? value.intValue() < 0 : value.floatValue() > 1.0;
         }
+
     }
 
     public record PlainPart(String raw) implements AttachedLabelBreakdownResult {

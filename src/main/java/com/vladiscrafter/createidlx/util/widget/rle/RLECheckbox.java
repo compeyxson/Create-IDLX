@@ -9,6 +9,7 @@ import org.jetbrains.annotations.NotNull;
 public class RLECheckbox extends TextureButton {
     protected boolean on;
     protected RLECheckbox linkedCheckbox;
+    protected Runnable linkedToggler;
 
     final ScreenElement tex = CreateIDLXGuiTextures.RLE_PL_PROPERTIES_CHECKBOX_OFF;
     final ScreenElement hoverTex = CreateIDLXGuiTextures.RLE_PL_PROPERTIES_CHECKBOX_OFF_H;
@@ -19,8 +20,8 @@ public class RLECheckbox extends TextureButton {
         super(x, y, 9, 9, CreateIDLXGuiTextures.RLE_PL_PROPERTIES_CHECKBOX_OFF, CreateIDLXGuiTextures.RLE_PL_PROPERTIES_CHECKBOX_OFF_H);
         this.on = false;
         this.linkedCheckbox = null;
+        this.linkedToggler = this::toggle;
         super.setNonFocusable();
-        super.withCallback(this::toggle);
     }
 
     public boolean isOn() {
@@ -42,6 +43,12 @@ public class RLECheckbox extends TextureButton {
     public void toggle() {
         this.on ^= true;
         if (linkedCheckbox != null) linkedCheckbox.setOn(!on);
+    }
+
+    @Override
+    public void runCallback(double mouseX, double mouseY) {
+        super.runCallback(mouseX, mouseY);
+        linkedToggler.run();
     }
 
     @Override
