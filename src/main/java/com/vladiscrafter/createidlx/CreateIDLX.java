@@ -111,7 +111,7 @@ public class CreateIDLX {
         CIDLXConfigs.onReload(evt.getConfig());
     }
 
-    public static void log(String text) {
-        if (Minecraft.getInstance().player != null) Minecraft.getInstance().player.sendSystemMessage(Component.literal(text));
+    public static void log(String text, Object... args) {
+        if (Minecraft.getInstance().player != null) Minecraft.getInstance().player.sendSystemMessage(Component.literal(String.format(text, args)));
     }
 }

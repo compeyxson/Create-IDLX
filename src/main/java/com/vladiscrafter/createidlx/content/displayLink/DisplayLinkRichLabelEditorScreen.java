@@ -35,11 +35,12 @@ import static com.vladiscrafter.createidlx.util.attachedLabel.AttachedLabelPart.
 import static com.vladiscrafter.createidlx.util.attachedLabel.AttachedLabelPart.PlaceholderType.*;
 
 public class DisplayLinkRichLabelEditorScreen extends AbstractSimiScreen {
-    protected String text, oldText;
+    protected String text, oldText, cachedText;
     protected Screen initiatorScreen;
     protected Consumer<String> onConfirm;
 
     protected LinkedHashMap<Integer, Placeholder> placeholders;
+    int cachedPlaceholdersAmount;
     int selectedPlaceholderIndex;
     Placeholder selectedPlaceholder;
 
@@ -66,6 +67,7 @@ public class DisplayLinkRichLabelEditorScreen extends AbstractSimiScreen {
     final Component plFlags = Component.literal("Flags");
     final Component plTypeS = Component.literal("Standard");
     final Component plTypeA = Component.literal("Alternative");
+    final Component plValueNone = Component.literal("—");
     final List<Component> plOperations = List.of(Component.literal("Cut"), Component.literal("Preserve"), Component.literal("None"));
     final List<Component> plOperationsAlt = List.of(Component.literal("Drop"), Component.literal("Keep"), Component.literal("None"));
     final DefaultClosingMode defaultClosingMode = CIDLXConfigs.client.rleDefaultClosingMode.get();
@@ -76,19 +78,22 @@ public class DisplayLinkRichLabelEditorScreen extends AbstractSimiScreen {
     public DisplayLinkRichLabelEditorScreen(String text, Screen initiator, Consumer<String> onConfirm) {
         this.text = text;
         this.oldText = text;
+        this.cachedText = text;
         this.initiatorScreen = initiator;
         this.onConfirm = onConfirm;
 
         this.placeholders = new LinkedHashMap<>();
-        this.placeholderTabButtons = new LinkedList<>();
+        this.cachedPlaceholdersAmount = -1;
         this.selectedPlaceholderIndex = 0;
         this.selectedPlaceholder = invalid.copy();
+
+        this.placeholderTabButtons = new LinkedList<>();
 
         this.leftGroupCache = new LinkedHashMap<>(3);
         this.rightGroupCache = new LinkedHashMap<>(3);
 
-        this.leftGroupScrollInputLabelCache = Component.literal("—");
-        this.rightGroupScrollInputLabelCache = Component.literal("—");
+        this.leftGroupScrollInputLabelCache = plValueNone;
+        this.rightGroupScrollInputLabelCache = plValueNone;
     }
 
     @Override
@@ -156,8 +161,8 @@ public class DisplayLinkRichLabelEditorScreen extends AbstractSimiScreen {
         addRenderableWidgets(placeholderTabButtons);
         addRenderableWidget(newPlaceholderTabButton);
 
-        int si = Math.min(index, placeholders.size() - 1);
-        if (!placeholders.isEmpty()) selectPlaceholder(si, placeholderTabButtons.get(si).getPlaceholder());
+        int ri = Math.min(index, placeholders.size() - 1);
+        if (!placeholders.isEmpty()) selectPlaceholder(ri, placeholderTabButtons.get(ri).getPlaceholder());
     }
 
     private void buildPlaceholderConfig(int index) {
@@ -372,11 +377,31 @@ public class DisplayLinkRichLabelEditorScreen extends AbstractSimiScreen {
         }
     }
 
+    private void autoselectNewestPlaceholder() {
+        if (text.equals(cachedText) || placeholders.size() <= cachedPlaceholdersAmount || cachedPlaceholdersAmount == -1) return;
+        
+        int i, tsi = 0;
+        for (int c = 0; c < text.length(); c++) {
+            if (c >= cachedText.length() || text.charAt(c) != cachedText.charAt(c)) {
+                tsi = c;
+                break;
+            }
+        }
+        final int si = tsi;
+        i = new LinkedList<>(placeholders.keySet())
+                .indexOf(placeholders.keySet().stream().filter(i1 -> i1 == si).findAny().orElse(placeholders.size() - 1));
+        if (i > 0 && placeholderTabButtons.get(i).getPlaceholder().isTrimming()) i--;
+        if (i != -1) selectPlaceholder(i, placeholderTabButtons.get(i).getPlaceholder());
+    }
+
     public void selectPlaceholder(int index, Placeholder placeholder) {
         if (index != selectedPlaceholderIndex) {
             clearGroupCaches();
             selectedPlaceholderIndex = index;
             selectedPlaceholder = placeholder;
+
+            if (placeholder.properties().leftGroup().operation() == CaptureGroupOperation.NONE) leftGroupScrollInputLabelCache = plValueNone;
+            if (placeholder.properties().rightGroup().operation() == CaptureGroupOperation.NONE) rightGroupScrollInputLabelCache = plValueNone;
         }
 
         for (RLEPlaceholderTabButton button : placeholderTabButtons) button.setSelected(index == button.getIndex());
@@ -455,6 +480,12 @@ public class DisplayLinkRichLabelEditorScreen extends AbstractSimiScreen {
         }
 
         if (oldPlaceholder.type() == TRIM_ALT && newOperation == CaptureGroupOperation.NONE) {
+            leftGroupCache.remove(properties.leftGroup().valueType());
+            rightGroupCache.remove(properties.rightGroup().valueType());
+            leftGroupCache.put(properties.leftGroup().valueType(), properties.leftGroup().value());
+            rightGroupCache.put(properties.rightGroup().valueType(), properties.rightGroup().value());
+            // TODO: finish and move to a separate method
+
             properties.leftGroup().setOperation(CaptureGroupOperation.NONE);
             properties.setMiddleGroupOperation(CaptureGroupOperation.NONE);
             properties.rightGroup().setOperation(CaptureGroupOperation.NONE);
@@ -492,6 +523,9 @@ public class DisplayLinkRichLabelEditorScreen extends AbstractSimiScreen {
         label.setHighlightPos(highlightPos);
         refreshPlaceholders();
         buildPlaceholderTabs(selectedPlaceholderIndex);
+        autoselectNewestPlaceholder();
+        cachedPlaceholdersAmount = placeholders.size();
+        cachedText = text;
     }
 
     public void onConfirm() {

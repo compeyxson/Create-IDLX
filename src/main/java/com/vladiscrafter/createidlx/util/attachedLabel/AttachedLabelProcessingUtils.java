@@ -386,7 +386,7 @@ public class AttachedLabelProcessingUtils {
 
         String rightGroupRaw = "";
         while (!readRightGroup) {
-            if (lI >= text.length()) break;
+            if (lI >= text.length()) return invalid.copy();
             if (!CG_ALLOWED.matcher("" + text.charAt(lI)).matches() && text.charAt(lI) != '}') return invalid.copy();
             else if (CG_ALLOWED_ALT.matcher("" + text.charAt(lI)).matches()) rightGroupRaw = rightGroupRaw.concat("" + text.charAt(lI));
             else if (text.charAt(lI) == '}') readRightGroup = true;
