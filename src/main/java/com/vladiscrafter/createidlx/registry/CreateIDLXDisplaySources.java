@@ -4,13 +4,10 @@ import com.simibubi.create.AllBlocks;
 import com.simibubi.create.Create;
 import com.simibubi.create.api.behaviour.display.DisplaySource;
 import com.simibubi.create.api.registry.CreateBuiltInRegistries;
-import com.simibubi.create.content.redstone.displayLink.source.StopWatchDisplaySource;
-import com.simibubi.create.content.redstone.displayLink.source.TimeOfDayDisplaySource;
 import com.tterrag.registrate.util.entry.BlockEntry;
 import com.vladiscrafter.createidlx.CreateIDLX;
 import com.vladiscrafter.createidlx.content.displayLink.source.*;
 import net.minecraft.core.Registry;
-import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.registries.RegisterEvent;
 
 public class CreateIDLXDisplaySources {
